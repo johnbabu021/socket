@@ -2,9 +2,11 @@ import { ClientOptions, WebSocket, WebSocketServer } from "ws";
 import { createServer } from "http";
 import { Request } from "express";
 import { parse } from "url";
+import Isonline from "./Isonline";
+import JsonWrapper from "./jsonWrapper";
 const server = createServer();
 const wss = new WebSocketServer({ server, clientTracking: true });
-
+let status: "offline" | "online" = "offline";
 let serverClients: { [index: string]: any } = {};
 wss.on("listening", function listening() {
   console.log("listening");
@@ -15,6 +17,16 @@ wss.on("headers", function headers(headers: string[], request: string) {
 wss.on("connection", function connection(ws: any, request) {
   console.log(request.headers["sec-websocket-key"], "headers");
   ws.id = request.headers["sec-websocket-key"];
+  const url = parse(request.url!.toString());
+  const { reciver } = Isonline(url);
+  console.log(reciver);
+  if (reciver.length > 10) {
+    status = "online";
+    ws.send(JsonWrapper({ ReciverStatus: status }));
+  } else {
+    status = "offline";
+    ws.send(JsonWrapper({ ReciverStatus: status }));
+  }
   console.log(ws.id);
   serverClients[ws.id] = ws;
 
@@ -27,6 +39,8 @@ wss.on("connection", function connection(ws: any, request) {
     console.log("error occoured");
   });
   ws.on("close", function dataFetcher() {
+    status = "offline";
+    ws.send(JsonWrapper({ ReciverStatus: status }));
     console.log("closed");
   });
 
@@ -34,21 +48,23 @@ wss.on("connection", function connection(ws: any, request) {
     console.log("recived message %s", data, "from", request.url);
     const url = parse(request.url!.toString());
     console.log(url.query);
-    let queryString: any = url!.query!.split("&");
-    console.log(queryString);
-    let sender = "";
-    let reciver = "";
-    queryString.map((item: any) => {
-      if (item.startsWith("sender")) {
-        sender = item.split("sender=")[1];
-      } else {
-        reciver = item.split("reciver=")[1];
-      }
-    });
-    // let test = queryString[2].replace("reciver=", "");
-
+    const { reciver, sender } = Isonline(url);
+    if (reciver.length > 10) {
+      status = "online";
+    } else {
+      status = "offline";
+    }
     try {
-      if (reciver !== "") serverClients[reciver].send(data, { binary: false });
+      if (reciver !== "" && sender !== reciver)
+        serverClients[reciver].send(
+          JsonWrapper({
+            ...JSON.parse(data),
+            reciverStatus: status,
+          }),
+          {
+            binary: false,
+          }
+        );
     } catch (err) {
       console.log("error");
     }
