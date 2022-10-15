@@ -33,16 +33,22 @@ wss.on("connection", function connection(ws: any, request) {
   ws.on("message", function message(data: string) {
     console.log("recived message %s", data, "from", request.url);
     const url = parse(request.url!.toString());
+    console.log(url.query);
     let queryString: any = url!.query!.split("&");
     console.log(queryString);
-    // const users: any = [];
-    // queryString.map((item: string) => {
-    //   users.push(item.split("="));
-    // });
-    let test = queryString[2].replace("reciver=", "");
+    let sender = "";
+    let reciver = "";
+    queryString.map((item: any) => {
+      if (item.startsWith("sender")) {
+        sender = item.split("sender=")[1];
+      } else {
+        reciver = item.split("reciver=")[1];
+      }
+    });
+    // let test = queryString[2].replace("reciver=", "");
 
     try {
-      serverClients[test].send(data, { binary: false });
+      if (reciver !== "") serverClients[reciver].send(data, { binary: false });
     } catch (err) {
       console.log("error");
     }
